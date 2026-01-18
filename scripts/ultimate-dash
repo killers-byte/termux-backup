@@ -1,0 +1,548 @@
+#!/data/data/com.termux/files/usr/bin/bash
+
+# ULTIMATE TERMUX DASHBOARD v3.0
+# Dengan live data, animasi, dan fitur premium
+
+# Colors with better compatibility
+RED=$'\033[1;31m'
+GREEN=$'\033[1;32m'
+YELLOW=$'\033[1;33m'
+BLUE=$'\033[1;34m'
+MAGENTA=$'\033[1;35m'
+CYAN=$'\033[1;36m'
+WHITE=$'\033[1;37m'
+BOLD=$'\033[1m'
+RESET=$'\033[0m'
+
+# Clear screen properly
+clear_screen() {
+    printf '\033[2J\033[3J\033[1;1H'
+}
+
+# Get real-time data
+get_live_data() {
+    # Storage with real percentage
+    if df_output=$(df -h $HOME 2>/dev/null | awk 'NR==2'); then
+        storage_used=$(echo "$df_output" | awk '{print $5}' | tr -d '%')
+        storage_color=$([ "$storage_used" -gt 90 ] && echo "$RED" || 
+                       [ "$storage_used" -gt 70 ] && echo "$YELLOW" || echo "$GREEN")
+        STORAGE="${storage_color}${storage_used}%${RESET}"
+    else
+        STORAGE="${YELLOW}N/A${RESET}"
+    fi
+    
+    # RAM with real percentage
+    if [ -f /proc/meminfo ]; then
+        total_mem=$(grep MemTotal /proc/meminfo | awk '{printf "%.0f", $2/1024}')
+        avail_mem=$(grep MemAvailable /proc/meminfo | awk '{printf "%.0f", $2/1024}')
+        if [ "$total_mem" -gt 0 ]; then
+            ram_percent=$((100 - (avail_mem * 100 / total_mem)))
+            ram_color=$([ "$ram_percent" -gt 90 ] && echo "$RED" || 
+                       [ "$ram_percent" -gt 70 ] && echo "$YELLOW" || echo "$GREEN")
+            RAM="${ram_color}${ram_percent}%${RESET}"
+        else
+            RAM="${YELLOW}N/A${RESET}"
+        fi
+    else
+        RAM="${YELLOW}N/A${RESET}"
+    fi
+    
+    # Real package count
+    PKG_COUNT=$(pkg list-installed 2>/dev/null | wc -l 2>/dev/null || echo "?")
+    
+    # Network status with real IP
+    if ip_addr=$(ip route get 1 2>/dev/null | awk '{print $7}' | head -1); then
+        NETWORK="${GREEN}✓ ${ip_addr}${RESET}"
+    else
+        NETWORK="${RED}✗ Offline${RESET}"
+    fi
+    
+    # CPU load
+    if [ -f /proc/loadavg ]; then
+        CPU_LOAD=$(awk '{printf "%.2f", $1}' /proc/loadavg)
+    else
+        CPU_LOAD="N/A"
+    fi
+    
+    # Battery if available
+    if [ -f /sys/class/power_supply/battery/capacity ]; then
+        BATTERY=$(cat /sys/class/power_supply/battery/capacity 2>/dev/null)
+        bat_color=$([ "$BATTERY" -lt 20 ] && echo "$RED" || 
+                   [ "$BATTERY" -lt 50 ] && echo "$YELLOW" || echo "$GREEN")
+        BATTERY="${bat_color}${BATTERY}%${RESET}"
+    else
+        BATTERY="${CYAN}AC${RESET}"
+    fi
+}
+
+# Show animated header
+show_header() {
+    clear_screen
+    
+    # Animated ASCII art
+    echo -e "${CYAN}"
+    cat << "HEADER"
+╔══════════════════════════════════════════════════════════════╗
+║      ████████╗███████╗██████╗ ███╗   ███╗██╗   ██╗██╗  ██╗   ║
+║      ╚══██╔══╝██╔════╝██╔══██╗████╗ ████║██║   ██║╚██╗██╔╝   ║
+║         ██║   █████╗  ██████╔╝██╔████╔██║██║   ██║ ╚███╔╝    ║
+║         ██║   ██╔══╝  ██╔══██╗██║╚██╔╝██║██║   ██║ ██╔██╗    ║
+║         ██║   ███████╗██║  ██║██║ ╚═╝ ██║╚██████╔╝██╔╝ ██╗   ║
+║         ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═╝   ║
+║                                                              ║
+║                   ULTIMATE DASHBOARD v3.0                    ║
+║                   ───────────────────────                    ║
+╚══════════════════════════════════════════════════════════════╝
+HEADER
+    echo -e "${RESET}"
+}
+
+# Show system stats with better layout
+show_stats() {
+    get_live_data
+    
+    echo -e "${YELLOW}${BOLD}📊 LIVE SYSTEM STATS${RESET}"
+    echo -e "${BLUE}═══════════════════════════════════════════════════════════════${RESET}"
+    
+    # Column layout using printf for alignment
+    printf "${GREEN}• Time:${RESET} %-25s ${GREEN}    • User:${RESET} ${MAGENTA}%s${RESET}\n" \
+        "$(date '+%H:%M:%S')" "$(whoami)@$(hostname)"
+    
+    printf "${GREEN}• Date:${RESET} %-25s ${GREEN}    • Shell:${RESET} %s\n" \
+        "$(date '+%d/%m/%Y')" "$(basename $SHELL)"
+    
+    printf "${GREEN}• Uptime:${RESET} %-23s ${GREEN} • Battery:${RESET} %s\n" \
+        "$(uptime -p 2>/dev/null | sed 's/up //' || echo 'N/A')" "$BATTERY"
+    
+    printf "${GREEN}• Storage:${RESET} %-23s ${GREEN}              • RAM:${RESET} %s\n" \
+        "$STORAGE" "$RAM"
+    
+    printf "${GREEN}• Packages:${RESET} %-21s ${GREEN}    • CPU Load:${RESET} %s\n" \
+        "$PKG_COUNT" "$CPU_LOAD"
+    
+    printf "${GREEN}• Network:${RESET} %s\n" "$NETWORK"
+    
+    echo ""
+}
+
+# Show menu with better grid
+show_menu() {
+    echo -e "${YELLOW}${BOLD}🚀 QUICK COMMANDS${RESET}"
+    echo -e "${BLUE}═══════════════════════════════════════════════════════════════${RESET}"
+    
+    # Two column menu
+    # Perbaiki menus array menjadi:
+menus=(
+    "[U] Update System       [S] Storage Setup"
+    "[C] Clean Cache         [F] File Manager" 
+    "[P] Python REPL         [N] Node.js REPL"
+    "[H] System Monitor      [T] Network Tools"
+    "[I] System Info         [O] OSINT & Hacking"
+    "[B] Backup/Restore      [A] App Manager"
+    "[D] Developer Tools     [X] Exit to Shell"
+    "[Q] Quit"
+)
+    
+    for menu in "${menus[@]}"; do
+        # Colorize the brackets
+        colored_menu=$(echo "$menu" | sed -E "s/\[(.)\]/\[${CYAN}\1${RESET}\]/g")
+        echo -e "  $colored_menu"
+    done
+    
+    echo ""
+    echo -e "${MAGENTA}${BOLD}Select option: ${RESET}"
+}
+
+# Process menu choice with enhanced features
+process_choice() {
+    local choice=${1,,}
+    
+    case $choice in
+        u)
+            echo -e "\n${YELLOW}🔄 UPDATING SYSTEM...${RESET}"
+            echo -e "${BLUE}────────────────────────────────────────${RESET}"
+            pkg update && pkg upgrade
+            echo -e "\n${GREEN}✅ Update complete!${RESET}"
+            ;;
+        c)
+            echo -e "\n${YELLOW}🧹 CLEANING CACHE...${RESET}"
+            echo -e "${BLUE}────────────────────────────────────────${RESET}"
+            pkg clean
+            rm -rf ~/.cache/* 2>/dev/null
+            echo -e "\n${GREEN}✅ Cache cleaned!${RESET}"
+            ;;
+        s)
+            echo -e "\n${YELLOW}📁 SETUP STORAGE...${RESET}"
+            termux-setup-storage
+            echo -e "\n${GREEN}✅ Storage configured!${RESET}"
+            ;;
+        f)
+            echo -e "\n${YELLOW}📂 FILE MANAGER...${RESET}"
+            if command -v mc >/dev/null; then
+                mc
+            else
+                echo "Installing Midnight Commander..."
+                pkg install mc -y
+                mc
+            fi
+            ;;
+        p)
+            echo -e "\n${YELLOW}🐍 PYTHON REPL${RESET} (type 'exit()' or Ctrl+D)"
+            echo -e "${BLUE}────────────────────────────────────────${RESET}"
+            python3
+            ;;
+        n)
+            echo -e "\n${YELLOW}⬢ NODE.JS REPL${RESET} (type '.exit' or Ctrl+D)"
+            echo -e "${BLUE}────────────────────────────────────────${RESET}"
+            node
+            ;;
+        h)
+            echo -e "\n${YELLOW}📈 SYSTEM MONITOR${RESET}"
+            if command -v btop >/dev/null; then
+                btop
+            elif command -v htop >/dev/null; then
+                htop
+            else
+                echo "Installing system monitor..."
+                pkg install htop -y
+                htop
+            fi
+            ;;
+        t)
+            show_network_tools
+            ;;
+        i)
+            echo -e "\n${YELLOW}🖥️  SYSTEM INFORMATION${RESET}"
+            echo -e "${BLUE}────────────────────────────────────────${RESET}"
+            if command -v neofetch >/dev/null; then
+                neofetch
+            else
+                pkg install neofetch -y
+                neofetch
+            fi
+            ;;
+        d)
+            show_dev_tools
+            ;;
+        a)
+            show_app_manager
+            ;;
+        b)
+            show_backup_tools
+            ;;
+        o)
+            show_osint_tools
+            ;;
+        x)
+            echo -e "\n${GREEN}👋 Returning to your beautiful shell...${RESET}"
+            sleep 1
+            clear_screen
+            return 1  # Exit signal
+            ;;
+        q)
+            echo -e "\n${GREEN}👋 Goodbye!${RESET}"
+            exit 0
+            ;;
+        *)
+            echo -e "\n${RED}❌ Invalid option!${RESET}"
+            sleep 1
+            ;;
+    esac
+    
+    # Pause after command
+    if [ "$choice" != "x" ] && [ "$choice" != "q" ]; then
+        echo -e "\n${CYAN}Press Enter to continue...${RESET}"
+        read -r
+    fi
+    
+    return 0
+}
+
+# Enhanced network tools
+show_network_tools() {
+    clear_screen
+    echo -e "${YELLOW}${BOLD}🔧 NETWORK TOOLS${RESET}"
+    echo -e "${BLUE}════════════════════════════════════════════════════════════${RESET}"
+    
+    echo "1. 📶 Network Interfaces"
+    echo "2. 🌐 Ping Test (Google)"
+    echo "3. 📡 Public IP Address"
+    echo "4. 🚀 Speed Test (curl)"
+    echo "5. 🔍 DNS Lookup"
+    echo "6. 📊 Bandwidth Monitor"
+    echo "7. ⬅️  Back to Main Menu"
+    echo ""
+    
+    read -p "Select [1-7]: " net_choice
+    
+    case $net_choice in
+        1)
+            echo -e "\n${YELLOW}Network Interfaces:${RESET}"
+            ip -c addr show 2>/dev/null || ifconfig 2>/dev/null
+            ;;
+        2)
+            echo -e "\n${YELLOW}Pinging 8.8.8.8 (4 packets)...${RESET}"
+            ping -c 4 8.8.8.8
+            ;;
+        3)
+            echo -e "\n${YELLOW}Public IP Address:${RESET}"
+            curl -s ifconfig.me
+            echo ""
+            ;;
+        4)
+            echo -e "\n${YELLOW}Running speed test...${RESET}"
+            curl -s https://raw.githubusercontent.com/sivel/speedtest-cli/master/speedtest.py | python3 -
+            ;;
+        5)
+            read -p "Enter domain: " domain
+            echo -e "\n${YELLOW}DNS Lookup for $domain:${RESET}"
+            nslookup "$domain" 2>/dev/null || echo "nslookup not available"
+            ;;
+        6)
+            if command -v vnstat >/dev/null; then
+                vnstat
+            else
+                echo "Install vnstat: pkg install vnstat"
+            fi
+            ;;
+        7)
+            return
+            ;;
+    esac
+}
+
+# Developer tools
+show_dev_tools() {
+    clear_screen
+    echo -e "${YELLOW}${BOLD}👨‍💻 DEVELOPER TOOLS${RESET}"
+    echo -e "${BLUE}════════════════════════════════════════════════════════════${RESET}"
+    
+    echo "1. 🐍 Python Package Manager"
+    echo "2. 📦 Node.js NPM"
+    echo "3. 🗃️  Git Tools"
+    echo "4. 🔨 Build Tools"
+    echo "5. 🧪 Code Editors"
+    echo "6. ⬅️  Back to Main Menu"
+    echo ""
+    
+    read -p "Select [1-6]: " dev_choice
+    
+    case $dev_choice in
+        1)
+            echo -e "\n${YELLOW}Python Packages:${RESET}"
+            pip list 2>/dev/null || echo "pip not available"
+            echo ""
+            read -p "Install package (or Enter to skip): " pkg_name
+            [ -n "$pkg_name" ] && pip install "$pkg_name"
+            ;;
+        2)
+            echo -e "\n${YELLOW}Node.js NPM:${RESET}"
+            npm list -g --depth=0 2>/dev/null || echo "npm not available"
+            ;;
+        3)
+            echo -e "\n${YELLOW}Git Status:${RESET}"
+            git status 2>/dev/null || echo "Not a git repository"
+            ;;
+        4)
+            echo "Build tools available:"
+            pkg list-installed | grep -E "(gcc|clang|make|cmake)"
+            ;;
+        5)
+            echo "Available editors:"
+            echo "1. nano (built-in)"
+            echo "2. vim (pkg install vim)"
+            echo "3. neovim (pkg install neovim)"
+            read -p "Install [1-3]: " editor_choice
+            case $editor_choice in
+                2) pkg install vim -y ;;
+                3) pkg install neovim -y ;;
+            esac
+            ;;
+        6)
+            return
+            ;;
+    esac
+}
+
+# Tambahkan function ini sebelum main() function:
+show_osint_tools() {
+    clear_screen
+    echo -e "${YELLOW}${BOLD}🕵️‍♂️ OSINT & HACKING TOOLS${RESET}"
+    echo -e "${BLUE}════════════════════════════════════════════════════════════${RESET}"
+    
+    echo "1. 🔍 IP/Domain Investigation"
+    echo "2. 👤 Username Search (Sherlock)"
+    echo "3. 📧 Email Verification"
+    echo "4. 📱 Phone Number Analysis"
+    echo "5. 🌐 WHOIS Lookup"
+    echo "6. 🔐 Password Security Check"
+    echo "7. 📷 Metadata Extraction"
+    echo "8. ⚙️  Install OSINT Tools"
+    echo "9. ⬅️  Back to Main Menu"
+    echo ""
+    
+    read -p "Select [1-9]: " osint_choice
+    
+    case $osint_choice in
+        1)
+            read -p "Enter IP/Domain: " target
+            echo -e "\n${YELLOW}Investigating $target...${RESET}"
+            
+            # WHOIS
+            echo -e "${CYAN}WHOIS Info:${RESET}"
+            whois "$target" 2>/dev/null | head -15 || echo "WHOIS not available"
+            
+            # DNS
+            echo -e "\n${CYAN}DNS Records:${RESET}"
+            dig "$target" ANY +short 2>/dev/null || echo "dig not available"
+            
+            # Geolocation
+            echo -e "\n${CYAN}Geolocation:${RESET}"
+            curl -s "ipinfo.io/$target/json" 2>/dev/null | python3 -m json.tool | head -20 || echo "API not available"
+            ;;
+        2)
+            read -p "Enter username: " username
+            echo -e "\n${YELLOW}Searching for $username...${RESET}"
+            
+            if [ -d ~/sherlock ]; then
+                cd ~/sherlock
+                python3 sherlock.py "$username" --no-color | head -15
+            else
+                echo "Sherlock not installed. Install with option 8."
+            fi
+            ;;
+        3)
+            read -p "Enter email: " email
+            echo -e "\n${YELLOW}Verifying $email...${RESET}"
+            
+            # Basic validation
+            if [[ "$email" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]]; then
+                echo -e "${GREEN}✓ Valid email format${RESET}"
+            else
+                echo -e "${RED}✗ Invalid email format${RESET}"
+            fi
+            
+            # Check breach
+            echo -e "\n${CYAN}Checking breach status...${RESET}"
+            echo "Visit: https://haveibeenpwned.com"
+            echo "Or run: curl -s https://api.pwnedpasswords.com/range/$(echo -n $email | sha1sum | cut -c1-5)"
+            ;;
+        4)
+            read -p "Enter phone number (+62xxxxxxxx): " phone
+            echo -e "\n${YELLOW}Analyzing $phone...${RESET}"
+            
+            if [[ $phone == +62* ]]; then
+                echo "Country: Indonesia"
+                prefix=${phone:3:3}
+                case $prefix in
+                    812|813|814|815|816|817|818|819) echo "Carrier: Telkomsel" ;;
+                    852|853|851|855|856|857|858) echo "Carrier: Indosat" ;;
+                    811|812|822|823|838) echo "Carrier: XL Axiata" ;;
+                    *) echo "Carrier: Unknown" ;;
+                esac
+            else
+                echo "International number detected"
+            fi
+            ;;
+        5)
+            read -p "Enter domain: " domain
+            echo -e "\n${YELLOW}WHOIS for $domain...${RESET}"
+            whois "$domain" 2>/dev/null || {
+                echo "Installing whois..."
+                pkg install whois -y
+                whois "$domain"
+            }
+            ;;
+        6)
+            read -sp "Enter password to check: " password
+            echo ""
+            echo -e "\n${YELLOW}Checking password security...${RESET}"
+            
+            # Basic checks
+            if [ ${#password} -lt 8 ]; then
+                echo -e "${RED}✗ Too short (min 8 chars)${RESET}"
+            else
+                echo -e "${GREEN}✓ Length OK${RESET}"
+            fi
+            
+            if [[ "$password" =~ [A-Z] ]] && [[ "$password" =~ [a-z] ]] && [[ "$password" =~ [0-9] ]]; then
+                echo -e "${GREEN}✓ Mixed characters OK${RESET}"
+            else
+                echo -e "${YELLOW}⚠️  Add uppercase, lowercase & numbers${RESET}"
+            fi
+            
+            # Hash and check breach (partial)
+            hash=$(echo -n "$password" | sha1sum | awk '{print $1}' | tr '[:lower:]' '[:upper:]')
+            prefix=${hash:0:5}
+            echo -e "\n${CYAN}Password hash (SHA1): ${hash:0:15}...${RESET}"
+            ;;
+        7)
+            read -p "Enter image file path: " filepath
+            if [ -f "$filepath" ]; then
+                echo -e "\n${YELLOW}Extracting metadata...${RESET}"
+                
+                if command -v exiftool >/dev/null; then
+                    exiftool "$filepath" | head -20
+                else
+                    echo "Install exiftool: pkg install exiftool"
+                fi
+            else
+                echo -e "${RED}File not found!${RESET}"
+            fi
+            ;;
+        8)
+            echo -e "\n${YELLOW}Installing OSINT tools...${RESET}"
+            echo -e "${BLUE}────────────────────────────────────────${RESET}"
+            
+            pkg install git python curl wget nmap whois dnsutils -y
+            
+            # Sherlock
+            if [ ! -d ~/sherlock ]; then
+                git clone https://github.com/sherlock-project/sherlock.git ~/sherlock
+                cd ~/sherlock
+                pip install -r requirements.txt
+                echo -e "${GREEN}✓ Sherlock installed${RESET}"
+            fi
+            
+            # theHarvester
+            if [ ! -d ~/theHarvester ]; then
+                git clone https://github.com/laramies/theHarvester.git ~/theHarvester
+                cd ~/theHarvester
+                pip install -r requirements.txt
+                echo -e "${GREEN}✓ theHarvester installed${RESET}"
+            fi
+            
+            echo -e "\n${GREEN}✅ OSINT tools installed!${RESET}"
+            echo "Sherlock: ~/sherlock"
+            echo "theHarvester: ~/theHarvester"
+            ;;
+        9)
+            return
+            ;;
+        *)
+            echo -e "${RED}Invalid option!${RESET}"
+            ;;
+    esac
+    
+    echo -e "\n${CYAN}Press Enter to continue...${RESET}"
+    read -r
+}
+
+# Main loop
+main() {
+    while true; do
+        show_header
+        show_stats
+        show_menu
+        
+        read -n 1 -r choice
+        echo ""
+        
+        if ! process_choice "$choice"; then
+            break
+        fi
+    done
+}
+
+# Run dashboard
+main
